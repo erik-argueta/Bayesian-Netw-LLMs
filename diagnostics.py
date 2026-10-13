@@ -4,7 +4,8 @@ Authors: Erik Argueta, Jerico Avila, Jose Cervantes
 """
 
 from aima.probability import *
-
+from openai import OpenAI 
+client = OpenAI()
 T, F = True, False
 
 class Diagnostics:
