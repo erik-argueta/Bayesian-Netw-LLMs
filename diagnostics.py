@@ -2,19 +2,12 @@
 Title: Programming Project 2 (Bayesian Networks with LLMs)
 Authors: Erik Argueta, Jerico Avila, Jose Cervantes
 """
-
-from aima.probability import *
 from openai import OpenAI 
 from pydantic import BaseModel, Field
 from typing import Literal
 import json
 import os
 
-# Use the NRP-issued key with the NRP endpoint.
-client = OpenAI(
-    api_key=os.environ["NRP_API_KEY"],
-    base_url="https://ellm.nrp-nautilus.io/v1",
-)
 T, F = True, False
 
 class DiagnosticExtraction(BaseModel):
@@ -23,39 +16,12 @@ class DiagnosticExtraction(BaseModel):
     
 class Diagnostics:
     """ Use a Bayesian network to diagnose between three lung diseases """
-    
 
     def __init__(self):
-        '''
-        Placing diagn_cancer within init so it can be shared with every instance of Diagnostics.  
-        '''
-        self.diagn_cancer = BayesNet([
-        
-                ('Asia', '', 0.01),                                             # P(+Asia) = 0.01
-                ('Smoking', '', 0.5),                                           # P(+Smoking) = 0.5
-                           
-                ('TB', 'Asia', { (T): 0.05, (F): 0.01 }),                       # Var: TB; Parent: Asia; P(+TB | Asia) 
-                ('Cancer', 'Smoking', {(T): 0.1, (F): 0.01}),                   # Var: Cancer; Parent: Smoking; P(+Cancer | Smoking)
-                ('Bronchitis', 'Smoking', {(T): 0.6, (F): 0.3}),                # Var: Bronchitis; Parent: Smoking; P(+Bronchitis | Smoking)
-                            
-                ('TBorCancer', 'TB Cancer',                                     # Var: TBorCancer; Parents: TB & Cancer; P(+TBorCancer | TB, Cancer)
-                    {
-                        (T, T): 1.0,                                            # P(+TBorCancer | TB=True,  Cancer= True)
-                        (T, F): 1.0,                                            # P(+TBorCancer | TB=True,  Cancer= False)
-                        (F, T): 1.0,                                            # P(+TBorCancer | TB=False, Cancer= True)
-                        (F, F): 0                                               # P(+TBorCancer | TB=False, Cancer= False)
-                    }), 
-        
-                    ('Dyspnea', 'TBorCancer Bronchitis', 
-                    {
-                        (T, T): 0.9,                                            # P(+Dyspnea | TBorCancer = True, Bronchitis = True)
-                        (T, F): 0.7,                                            # P(+Dyspnea | TBorCancer = True, Bronchitis = False)
-                        (F, T): 0.8,                                            # P(+Dyspnea | TBorCancer = False, Bronchitis = True)
-                        (F, F): 0.1                                             # P(+Dyspnea | TBorCancer = False, Bronchitis = False)
-                    }),
-                    
-                    ('Xray', 'TBorCancer', {(T): 0.99, (F): 0.05})              # Var: xray; Parent: TBorCancer; P(+xray | TBorCancer)
-            ])
+        self.client = OpenAI(
+            api_key=os.environ["NRP_API_KEY"],
+            base_url="https://ellm.nrp-nautilus.io/v1",
+        )
         
 
     def diagnose (self, asia, smoking, xray, dyspnea):
@@ -92,6 +58,12 @@ class Diagnostics:
         if dyspnea != "NA":
             evidence["Dyspnea"] = conversion[dyspnea]
 
+        """
+        =======================================================================================================
+        Below is a translation of the probabilities that were listed in this class from the previous project. 
+        We removed that portion of the code as it was not going to be used anymore.
+        =======================================================================================================
+        """
         prompt = f"""
                 The following is a Bayesian network used to determine the most likely disease.
 
@@ -134,7 +106,7 @@ class Diagnostics:
 
                 Calculate P(TB=True | evidence), P(Cancer=True | evidence),
                 and P(Bronchitis=True | evidence).
-                
+
                 Return the disease with the highest posterior probability:
                 - diagnosis: exactly "TB", "Cancer", or "Bronchitis"
                 - probability: that disease's posterior probability, between 0 and 1
@@ -146,7 +118,7 @@ class Diagnostics:
                 
         # Follow the same Chat Completions structure as the NRP example.
         print("Observed evidence:", evidence)
-        completion = client.chat.completions.create(
+        completion = self.client.chat.completions.create(
             model="gpt-oss",
             messages=[
                 {
