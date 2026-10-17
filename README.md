@@ -14,14 +14,29 @@ Program Authors:
 ## NRP API Key
 This project reads the NRP LLM key from your local environment, not from source code.
 
-1. Copy the example environment file:  
-`cp .env.example .env`
+The client uses `https://ellm.nrp-nautilus.io/v1`, model `gpt-oss`, and
+`client.chat.completions.create(...)`.
 
-2. Edit `.env` and replace `your_nrp_api_key_here` with your real NRP API key.
+Set the key in your terminal or `~/.bashrc`:
 
-3. Run the GUI or tests normally. `diagnostics.py` loads `.env` automatically.
+```bash
+export NRP_API_KEY="your_nrp_api_key_here"
+```
 
-The real `.env` file is ignored by git. Do not commit private API keys.
+If you edited `~/.bashrc`, reload it with `source ~/.bashrc`. Start the GUI
+from that same terminal:
+
+```bash
+python diagnostics_gui.py
+```
+
+Use an NRP-issued key for this endpoint. Colab's `userdata` is replaced by
+`os.environ["NRP_API_KEY"]` for local use. The code does not load `.env` files.
+Do not commit private API keys.
+
+The prompt requests JSON containing `diagnosis` and `probability`. Pydantic
+validates the returned JSON locally; this does not assume that the NRP endpoint
+supports OpenAI's server-side Structured Outputs options.
 
 ## Python .venv
 Please don't forget to create your venv as `.venv`  

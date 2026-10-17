@@ -1,15 +1,29 @@
 """
-Title: Programming Project 1 (Bayesian Networks)
+Title: Programming Project 2 (Bayesian Networks with LLMs)
 Authors: Erik Argueta, Jerico Avila, Jose Cervantes
 """
 
 from aima.probability import *
 from openai import OpenAI 
-client = OpenAI()
+from pydantic import BaseModel, Field
+from typing import Literal
+import json
+import os
+
+# Use the NRP-issued key with the NRP endpoint.
+client = OpenAI(
+    api_key=os.environ["NRP_API_KEY"],
+    base_url="https://ellm.nrp-nautilus.io/v1",
+)
 T, F = True, False
 
+class DiagnosticExtraction(BaseModel):
+    diagnosis: Literal["TB", "Cancer", "Bronchitis"]
+    probability: float = Field(ge=0, le=1)
+    
 class Diagnostics:
     """ Use a Bayesian network to diagnose between three lung diseases """
+    
 
     def __init__(self):
         '''
@@ -45,6 +59,7 @@ class Diagnostics:
         
 
     def diagnose (self, asia, smoking, xray, dyspnea):
+
         # ===============================================================================
         # Conversions to T/F values based on the fields in diangostics_gui
         # ===============================================================================
@@ -77,20 +92,80 @@ class Diagnostics:
         if dyspnea != "NA":
             evidence["Dyspnea"] = conversion[dyspnea]
 
+        prompt = f"""
+                The following is a Bayesian network used to determine the most likely disease.
 
-        """
-        ===============================================================================
-        * diagnose is called at line 15 withing diagnostics_gui.py
-        * enumeration_asks(variable, evidence dictionary, bayes_network)
-        * [T] extracts the truth probability
-        * returns string and probability from dictionary
-        ===============================================================================
-        """
-        cancer_prob = enumeration_ask('Cancer', evidence, self.diagn_cancer)[T]
-        tb_prob = enumeration_ask('TB', evidence, self.diagn_cancer)[T]
-        bronc_prob = enumeration_ask('Bronchitis', evidence, self.diagn_cancer)[T]
+                All variables are Boolean. Each probability below is for the variable
+                being True. The probability of False is its complement.
 
-        results = { "Cancer" : cancer_prob, "TB" : tb_prob, "Bronchitis" : bronc_prob}
-        most_likely = max(results, key=results.get)
+                Network:
+                - P(Asia=True) = 0.01
+                - P(Smoking=True) = 0.5
 
-        return [most_likely, results[most_likely]]
+                - P(TB=True | Asia=True) = 0.05
+                - P(TB=True | Asia=False) = 0.01
+
+                - P(Cancer=True | Smoking=True) = 0.1
+                - P(Cancer=True | Smoking=False) = 0.01
+
+                - P(Bronchitis=True | Smoking=True) = 0.6
+                - P(Bronchitis=True | Smoking=False) = 0.3
+
+                - TBorCancer is True exactly when TB or Cancer is True.
+
+                - P(Dyspnea=True | TBorCancer=True, Bronchitis=True) = 0.9
+                - P(Dyspnea=True | TBorCancer=True, Bronchitis=False) = 0.7
+                - P(Dyspnea=True | TBorCancer=False, Bronchitis=True) = 0.8
+                - P(Dyspnea=True | TBorCancer=False, Bronchitis=False) = 0.1
+
+                - P(Xray=True | TBorCancer=True) = 0.99
+                - P(Xray=True | TBorCancer=False) = 0.05
+
+                The joint distribution factors as:
+                P(Asia) * P(Smoking) * P(TB|Asia) * P(Cancer|Smoking) *
+                P(Bronchitis|Smoking) * P(TBorCancer|TB,Cancer) *
+                P(Dyspnea|TBorCancer,Bronchitis) * P(Xray|TBorCancer)
+
+                Observed evidence:
+                {json.dumps(evidence)}
+
+                Any variable(s) not present from the evidence are unobserved.
+                Do not assume unobserved variables are False.
+
+                Calculate P(TB=True | evidence), P(Cancer=True | evidence),
+                and P(Bronchitis=True | evidence).
+                
+                Return the disease with the highest posterior probability:
+                - diagnosis: exactly "TB", "Cancer", or "Bronchitis"
+                - probability: that disease's posterior probability, between 0 and 1
+                """
+                
+        
+
+
+                
+        # Follow the same Chat Completions structure as the NRP example.
+        print("Observed evidence:", evidence)
+        completion = client.chat.completions.create(
+            model="gpt-oss",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Solve the Bayesian diagnosis problem. Return only a JSON "
+                        "object with diagnosis and probability fields. "
+                        "Do not include Markdown fences or explanatory text."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+        )
+
+        content = completion.choices[0].message.content
+        if not content:
+            raise RuntimeError("ERROR: No diagnosis returned")
+
+        # Validate the JSON response before passing the two values to the GUI.
+        result = DiagnosticExtraction.model_validate_json(content)
+        print("Diagnosis:", result.diagnosis, "Probability:", result.probability)
+        return [result.diagnosis, result.probability]
